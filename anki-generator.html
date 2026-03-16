@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anki Card Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a22;
+    --border: #2e2e3e;
+    --accent: #e8c547;
+    --accent2: #5b8dd9;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --card-front: #1e2d4a;
+    --card-back: #2a1e3f;
+    --success: #4caf82;
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+  }
+  .logo {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    color: #0f0f13;
+    font-size: 14px;
+    letter-spacing: -1px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+  header p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Main layout */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 0;
+    min-height: 0;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+  }
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Buttons */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: var(--radius);
+    border: none;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s ease;
+    letter-spacing: -0.2px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #0f0f13;
+  }
+  .btn-primary:hover { background: #f0d060; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-export {
+    background: var(--accent2);
+    color: white;
+  }
+  .btn-export:hover { background: #6fa0e8; transform: translateY(-1px); }
+  .btn-export:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* JSON Import area */
+  .json-area {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    resize: vertical;
+    min-height: 200px;
+    width: 100%;
+    line-height: 1.5;
+    transition: border-color 0.15s;
+  }
+  .json-area:focus {
+    outline: none;
+    border-color: var(--accent2);
+  }
+  .json-area::placeholder { color: var(--muted); }
+
+  /* Status */
+  .status {
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    display: none;
+  }
+  .status.ok { background: #1a3028; color: var(--success); border: 1px solid #2a5040; display: block; }
+  .status.err { background: #3a1a1a; color: #e87070; border: 1px solid #5a2a2a; display: block; }
+  .status.info { background: #1a2535; color: var(--accent2); border: 1px solid #2a3a55; display: block; }
+
+  /* Stats */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    text-align: center;
+  }
+  .stat-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .stat-lbl {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+  }
+
+  /* Preview area */
+  .preview-area {
+    padding: 32px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .preview-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+  .badge {
+    background: var(--border);
+    color: var(--muted);
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Card list preview */
+  .card-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .card-preview {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .card-preview:hover { transform: translateY(-2px); border-color: var(--muted); }
+  .card-front-p {
+    background: var(--card-front);
+    padding: 14px 16px;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+  }
+  .card-front-p p {
+    font-size: 13px;
+    line-height: 1.4;
+    color: #a8c8f8;
+    font-weight: 400;
+  }
+  .card-back-p {
+    background: var(--card-back);
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+  }
+  .card-back-p p {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #c8a8f8;
+  }
+  .card-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+  .empty-state p { font-size: 14px; }
+  .empty-state small { font-size: 12px; opacity: 0.6; }
+
+  /* Import file hidden */
+  #fileInput { display: none; }
+
+  /* Progress bar */
+  .progress-wrap { display: none; }
+  .progress-wrap.show { display: block; }
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 2px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Template example */
+  .template-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .tip {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+    padding: 8px 0;
+  }
+  .tip strong { color: var(--accent); }
+
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">A↕</div>
+  <div>
+    <h1>Anki Card Generator</h1>
+    <p>Genera tarjetas de estudio en PDF listas para imprimir y cortar</p>
+  </div>
+</header>
+
+<main>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="section-label">1. Importar preguntas</div>
+      <textarea class="json-area" id="jsonInput" placeholder='Pega tu JSON aquí...
+
+Ejemplo:
+{
+  "cards": [
+    { "p": "¿Qué es...?", "r": "Es..." }
+  ]
+}'></textarea>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">
+          📂 Abrir archivo
+        </button>
+        <button class="btn btn-primary" onclick="parseJSON()">
+          ✓ Cargar JSON
+        </button>
+      </div>
+      <input type="file" id="fileInput" accept=".json" onchange="loadFile(event)">
+    </div>
+
+    <div id="statusBox" class="status"></div>
+
+    <div>
+      <div class="section-label">Formato JSON aceptado</div>
+      <div class="template-box">{
+  "cards": [
+    {
+      "p": "Pregunta",
+      "r": "Respuesta"
+    }
+  ]
+}</div>
+      <p class="tip" style="margin-top:8px;">También acepta el formato con claves <strong>"pr"</strong> anidadas o arrays directos de objetos <strong>p/r</strong>.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div id="statsSection" style="display:none">
+      <div class="section-label">Resumen</div>
+      <div class="stats">
+        <div class="stat-box">
+          <div class="stat-num" id="statCards">0</div>
+          <div class="stat-lbl">Tarjetas</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="statPages">0</div>
+          <div class="stat-lbl">Hojas A4</div>
+        </div>
+      </div>
+      <p class="tip" style="margin-top:8px;">8 tarjetas por hoja · <strong>Anverso</strong> (preguntas) + <strong>Reverso</strong> (respuestas)<br>
+      Imprime a doble cara <strong>volteando por el lado largo</strong>.</p>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="section-label">Generando PDF...</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <div>
+      <div class="section-label">2. Exportar</div>
+      <button class="btn btn-export" id="exportBtn" onclick="generatePDF()" disabled>
+        ⬇ Generar y descargar PDF
+      </button>
+    </div>
+  </aside>
+
+  <!-- Preview -->
+  <section class="preview-area">
+    <div class="preview-header">
+      <h2>Vista previa de tarjetas</h2>
+      <span class="badge" id="previewBadge">Sin tarjetas</span>
+    </div>
+    <div id="cardList" class="card-list">
+      <div class="empty-state">
+        <div class="empty-icon">🃏</div>
+        <p>Ninguna tarjeta cargada</p>
+        <small>Pega tu JSON en el panel izquierdo y pulsa "Cargar JSON"</small>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const { jsPDF } = window.jspdf;
+
+let cards = [];
+
+// ── JSON Parsing ──────────────────────────────────────────────────────────────
+function parseCards(text) {
+  // Normalizar el formato con claves "pr" duplicadas (JSON inválido)
+  // Las reemplazamos con array
+  let normalized = text;
+
+  // Intento 1: parse directo
+  try {
+    const data = JSON.parse(normalized);
+    return extractFromParsed(data);
+  } catch(e) {}
+
+  // Intento 2: Corregir claves "pr" duplicadas → extraer pares p/r con regex en una sola línea
+  try {
+    const pairs = [];
+    const re = /"p"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"r"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      pairs.push({ p: m[1].replace(/\\n/g,'\n').replace(/\\"/g,'"'), r: m[2].replace(/\\n/g,'\n').replace(/\\"/g,'"') });
+    }
+    if (pairs.length > 0) return pairs;
+  } catch(e) {}
+
+  return null;
+}
+
+function extractFromParsed(data) {
+  // Array directo: [{p,r}, ...]
+  if (Array.isArray(data)) {
+    return data.filter(x => x.p && x.r).map(x => ({ p: String(x.p), r: String(x.r) }));
+  }
+  // { cards: [...] }
+  if (data.cards && Array.isArray(data.cards)) {
+    return data.cards.filter(x => x.p && x.r).map(x => ({ p: String(x.p), r: String(x.r) }));
+  }
+  // { pr: {p, r} } (solo una, clave no duplicada)
+  if (data.pr && data.pr.p) {
+    return [{ p: String(data.pr.p), r: String(data.pr.r) }];
+  }
+  // Buscar propiedades que sean {p, r}
+  const result = [];
+  for (const val of Object.values(data)) {
+    if (val && typeof val === 'object' && val.p && val.r) {
+      result.push({ p: String(val.p), r: String(val.r) });
+    }
+  }
+  return result.length > 0 ? result : null;
+}
+
+// ── Load & Parse ──────────────────────────────────────────────────────────────
+function loadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('jsonInput').value = e.target.result;
+    parseJSON();
+  };
+  reader.readAsText(file);
+}
+
+function parseJSON() {
+  const text = document.getElementById('jsonInput').value.trim();
+  if (!text) {
+    showStatus('Pega o carga un JSON primero.', 'err');
+    return;
+  }
+  const result = parseCards(text);
+  if (!result || result.length === 0) {
+    showStatus('No se encontraron tarjetas. Verifica el formato JSON.', 'err');
+    return;
+  }
+  cards = result;
+  showStatus(`✓ ${cards.length} tarjeta${cards.length !== 1 ? 's' : ''} cargada${cards.length !== 1 ? 's' : ''} correctamente.`, 'ok');
+  renderPreview();
+  updateStats();
+  document.getElementById('exportBtn').disabled = false;
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('statusBox');
+  el.className = 'status ' + type;
+  el.textContent = msg;
+}
+
+// ── Preview ───────────────────────────────────────────────────────────────────
+function renderPreview() {
+  const list = document.getElementById('cardList');
+  document.getElementById('previewBadge').textContent = `${cards.length} tarjeta${cards.length !== 1 ? 's' : ''}`;
+  list.innerHTML = cards.map((c, i) => `
+    <div class="card-preview">
+      <div class="card-front-p">
+        <div>
+          <div class="card-num"># ${i + 1} · PREGUNTA</div>
+          <p>${escHtml(c.p)}</p>
+        </div>
+      </div>
+      <div class="card-back-p">
+        <div>
+          <div class="card-num">RESPUESTA</div>
+          <p>${escHtml(c.r)}</p>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updateStats() {
+  const pages = Math.ceil(cards.length / 8);
+  document.getElementById('statCards').textContent = cards.length;
+  document.getElementById('statPages').textContent = pages;
+  document.getElementById('statsSection').style.display = 'block';
+}
+
+// ── PDF Generation ────────────────────────────────────────────────────────────
+// A4: 210 x 297 mm
+// Naipe apaisado: 88.9 x 63.5 mm → usamos 88 x 63
+// 2 columnas x 4 filas = 8 tarjetas por hoja
+// Márgenes: (210 - 2*88) / 2 = 17mm | (297 - 4*63) / 2 = 22.5mm
+
+const CARD_W = 88;   // mm
+const CARD_H = 63;   // mm
+const COLS = 2;
+const ROWS = 4;
+const CARDS_PER_PAGE = COLS * ROWS;
+const PAGE_W = 210;
+const PAGE_H = 297;
+const MARGIN_X = (PAGE_W - COLS * CARD_W) / 2;
+const MARGIN_Y = (PAGE_H - ROWS * CARD_H) / 2;
+
+async function generatePDF() {
+  if (cards.length === 0) return;
+  const btn = document.getElementById('exportBtn');
+  btn.disabled = true;
+  setProgress(0);
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const totalSheets = Math.ceil(cards.length / CARDS_PER_PAGE);
+
+  for (let sheet = 0; sheet < totalSheets; sheet++) {
+    const sheetCards = cards.slice(sheet * CARDS_PER_PAGE, (sheet + 1) * CARDS_PER_PAGE);
+
+    // ── ANVERSO (preguntas) ──
+    if (sheet > 0) doc.addPage();
+    drawSheetLabel(doc, 'ANVERSO — Preguntas');
+    drawCutLines(doc);
+    for (let i = 0; i < sheetCards.length; i++) {
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const x = MARGIN_X + col * CARD_W;
+      const y = MARGIN_Y + row * CARD_H;
+      drawFrontCard(doc, x, y, sheetCards[i].p, sheet * CARDS_PER_PAGE + i + 1);
+    }
+
+    // ── REVERSO (respuestas) ──
+    doc.addPage();
+    drawSheetLabel(doc, 'REVERSO — Respuestas  ·  Imprimir por detrás de la hoja anterior');
+    drawCutLines(doc);
+    for (let i = 0; i < sheetCards.length; i++) {
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      // Espejo horizontal para doble cara (voltear por lado largo)
+      const mirrorCol = (COLS - 1) - col;
+      const x = MARGIN_X + mirrorCol * CARD_W;
+      const y = MARGIN_Y + row * CARD_H;
+      drawBackCard(doc, x, y, sheetCards[i].r, sheet * CARDS_PER_PAGE + i + 1);
+    }
+
+    setProgress(Math.round(((sheet + 1) / totalSheets) * 100));
+    await sleep(10);
+  }
+
+  setProgress(100);
+  await sleep(200);
+
+  doc.save(`anki-tarjetas-${cards.length}cards.pdf`);
+  btn.disabled = false;
+  hideProgress();
+  showStatus(`✓ PDF generado: ${totalSheets} hoja${totalSheets !== 1 ? 's' : ''} A4 (${totalSheets * 2} páginas).`, 'ok');
+}
+
+function drawSheetLabel(doc, label) {
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(0, 0, 0);
+  doc.text(label, PAGE_W / 2, 6, { align: 'center' });
+}
+
+function drawCutLines(doc) {
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.15);
+  doc.setLineDashPattern([1.5, 1.5], 0);
+
+  // Líneas verticales (columnas)
+  for (let c = 0; c <= COLS; c++) {
+    const x = MARGIN_X + c * CARD_W;
+    // Línea de corte: solo dentro del área de tarjetas + pequeña extensión
+    doc.line(x, MARGIN_Y - 4, x, MARGIN_Y + ROWS * CARD_H + 4);
+  }
+
+  // Líneas horizontales (filas)
+  for (let r = 0; r <= ROWS; r++) {
+    const y = MARGIN_Y + r * CARD_H;
+    doc.line(MARGIN_X - 4, y, MARGIN_X + COLS * CARD_W + 4, y);
+  }
+
+  doc.setLineDashPattern([], 0);
+
+  // Marcas de tijera en las esquinas exteriores
+  doc.setFontSize(7);
+  doc.setTextColor(0, 0, 0);
+  const scissors = '✂';
+  const corners = [
+    [MARGIN_X, MARGIN_Y],
+    [MARGIN_X + COLS * CARD_W, MARGIN_Y],
+    [MARGIN_X, MARGIN_Y + ROWS * CARD_H],
+    [MARGIN_X + COLS * CARD_W, MARGIN_Y + ROWS * CARD_H],
+  ];
+  corners.forEach(([cx, cy]) => {
+    doc.text(scissors, cx, cy, { align: 'center', baseline: 'middle' });
+  });
+}
+
+function drawFrontCard(doc, x, y, text, num) {
+  // B&W - sin fondo coloreado
+
+  // Número
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`#${num}`, x + CARD_W - 3, y + 5, { align: 'right' });
+
+  // Etiqueta
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text('PREGUNTA', x + CARD_W / 2, y + 5, { align: 'center' });
+
+  // Línea separadora fina
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
+  doc.line(x + 3, y + 8, x + CARD_W - 3, y + 8);
+
+  // Texto pregunta centrado
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  drawWrappedText(doc, text, x + 4, y + 12, CARD_W - 8, CARD_H - 15, 10, 5);
+}
+
+function drawBackCard(doc, x, y, text, num) {
+  // B&W - sin fondo coloreado
+
+  // Número
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`#${num}`, x + 3, y + 5);
+
+  // Etiqueta
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text('RESPUESTA', x + CARD_W / 2, y + 5, { align: 'center' });
+
+  // Línea separadora fina
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
+  doc.line(x + 3, y + 8, x + CARD_W - 3, y + 8);
+
+  // Texto respuesta centrado
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  drawWrappedText(doc, text, x + 4, y + 12, CARD_W - 8, CARD_H - 15, 9, 4.5);
+}
+
+function drawWrappedText(doc, text, x, y, maxW, maxH, fontSize, lineHeight) {
+  doc.setFontSize(fontSize);
+  const lines = doc.splitTextToSize(text, maxW);
+  const totalH = lines.length * lineHeight;
+  // Centrar verticalmente
+  const startY = y + (maxH - totalH) / 2 + lineHeight;
+  const cx = x + maxW / 2;
+  lines.forEach((line, i) => {
+    if (y + (maxH - totalH) / 2 + (i + 1) * lineHeight < y + maxH) {
+      doc.text(line, cx, startY + i * lineHeight, { align: 'center' });
+    }
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setProgress(pct) {
+  document.getElementById('progressWrap').classList.add('show');
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+function hideProgress() {
+  setTimeout(() => {
+    document.getElementById('progressWrap').classList.remove('show');
+    document.getElementById('progressFill').style.width = '0%';
+  }, 1000);
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
